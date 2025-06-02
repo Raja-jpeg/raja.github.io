@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>./dev/portfolio - Interactive Terminal</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --primary-green: #00ff41;
+            --secondary-green: #008f11;
+            --dark-bg: #0a0a0a;
+            --terminal-bg: #1a1a1a;
+            --text-dim: #666;
+            --red: #ff0000;
+            --cyan: #00ffff;
+            --yellow: #ffff00;
+        }
+        
+        body {
+            font-family: 'JetBrains Mono', monospace;
+            background: var(--dark-bg);
+            color: var(--primary-green);
+            overflow: hidden;
+            height: 100vh;
+        }
+        
+        .matrix-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            opacity: 0.1;
+        }
+        
+        .boot-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--dark-bg);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 0.5s ease-out;
+        }
+        
+        .boot-screen.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        .loader {
+            width: 50px;
+            height: 50px;
+            border: 3px solid var(--secondary-green);
+            border-top: 3px solid var(--primary-green);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .boot-text {
+            font-size: 14px;
+            color: var(--primary-green);
+            text-align: center;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 15px 20px;
+            background: var(--terminal-bg);
+            border: 1px solid var(--secondary-green);
+            border-radius: 8px;
+        }
+        
+        .logo {
+            font-size: 18px;
+            font-weight: bold;
+            color: var(--primary-green);
+        }
+        
+        .system-info {
+            font-size: 12px;
+            color: var(--text-dim);
+        }
+        
+        .terminal-window {
+            flex: 1;
+            background: var(--terminal-bg);
+            border: 1px solid var(--secondary-green);
+            border-radius: 8px;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .terminal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--secondary-green);
+        }
+        
+        .window-controls {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .control {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+        
+        .close { background: var(--red); }
+        .minimize { background: var(--yellow); }
+        .maximize { background: var(--primary-green); }
+        
+        .terminal-title {
+            font-size: 14px;
+            color: var(--text-dim);
+        }
+        
+        .output {
+            flex: 1;
+            margin-bottom: 20px;
+            white-space: pre-wrap;
+            line-height: 1.6;
+        }
+        
+        .input-line {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            position: sticky;
+            bottom: 0;
+            background: var(--terminal-bg);
+            padding: 10px 0;
+        }
+        
+        .prompt {
+            color: var(--primary-green);
+            font-weight: bold;
+        }
+        
+        .terminal-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: var(--primary-green);
+            font-family: inherit;
+            font-size: 14px;
+        }
+        
+        .cursor {
+            display: inline-block;
+            width: 8px;
+            height: 16px;
+            background: var(--primary-green);
+            animation: blink 1s infinite;
+        }
+        
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+        
+        .command {
+            color: var(--cyan);
+        }
+        
+        .success {
+            color: var(--primary-green);
+        }
+        
+        .error {
+            color: var(--red);
+        }
+        
+        .warning {
+            color: var(--yellow);
+        }
+        
+        .dim {
+            color: var(--text-dim);
+        }
+        
+        .highlight {
+            background: var(--secondary-green);
+            color: var(--dark-bg);
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+        
+        .ascii-art {
+            color: var(--secondary-green);
+            font-size: 10px;
+            line-height: 1;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: var(--dark-bg);
+            border: 1px solid var(--secondary-green);
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--secondary-green), var(--primary-green));
+            transition: width 0.3s ease;
+        }
+        
+        .skill-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin: 10px 0;
+        }
+        
+        .skill-item {
+            background: var(--dark-bg);
+            padding: 10px;
+            border: 1px solid var(--secondary-green);
+            border-radius: 4px;
+        }
+        
+        .glitch {
+            animation: glitch 2s infinite;
+        }
+        
+        @keyframes glitch {
+            0%, 90%, 100% { transform: translate(0); }
+            20% { transform: translate(-1px, 1px); }
+            40% { transform: translate(-1px, -1px); }
+            60% { transform: translate(1px, 1px); }
+            80% { transform: translate(1px, -1px); }
+        }
+        
+        .typewriter {
+            overflow: hidden;
+            border-right: 2px solid var(--primary-green);
+            white-space: nowrap;
+            animation: typing 2s steps(40, end), blink-caret 0.75s step-end infinite;
+        }
+        
+        @keyframes typing {
+            from { width: 0; }
+            to { width: 100%; }
+        }
+        
+        @keyframes blink-caret {
+            from, to { border-color: transparent; }
+            50% { border-color: var(--primary-green); }
+        }
+        
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: var(--dark-bg);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: var(--secondary-green);
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--primary-green);
+        }
+    </style>
+</head>
+<body>
+    <canvas class="matrix-bg" id="matrix"></canvas>
+    
+    <div class="boot-screen" id="bootScreen">
+        <div class="loader"></div>
+        <div class="boot-text">
+            <div>Initializing secure connection...</div>
+            <div>Loading portfolio.exe</div>
+            <div>Establishing terminal interface...</div>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="header">
+            <div class="logo">root@portfolio:~$</div>
+            <div class="system-info">
+                <span id="currentTime"></span> | 
+                <span>Kernel: Linux 6.1.0 | 
+                Uptime: <span id="uptime">00:00:00</span>
+            </div>
+        </div>
+        
+        <div class="terminal-window">
+            <div class="terminal-header">
+                <div class="window-controls">
+                    <div class="control close"></div>
+                    <div class="control minimize"></div>
+                    <div class="control maximize"></div>
+                </div>
+                <div class="terminal-title">Terminal - /home/dev/portfolio</div>
+            </div>
+            
+            <div class="output" id="output"></div>
+            
+            <div class="input-line">
+                <span class="prompt">dev@portfolio:~$</span>
+                <input type="text" class="terminal-input" id="terminalInput" autocomplete="off" spellcheck="false">
+                <span class="cursor"></span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+              
+        // Terminal functionality
+        const output = document.getElementById('output');
+        const input = document.getElementById('terminalInput');
+        const bootScreen = document.getElementById('bootScreen');
+        
+        let commandHistory = [];
+        let historyIndex = -1;
+        let startTime = Date.now();
+        
+const userData = {
+            name: "Raja S R P",
+            title: "Passionate About Cybersecurity & AI | Software Engineer | MSCS Graduate",
+            location: "New York, NY",
+            email: "rajashivaram.0@gmail.com",
+            github: "github.com/Raja-jpeg",
+            linkedin: "linkedin.com/in/raja-shiva-ram",
+           skills: {
+                "Frontend": ["React", "Vue.js", "TypeScript", "Next.js", "Tailwind CSS"],
+                "Backend": ["Node.js", "Python", "JavaScript", "Java", "Apache", "PostgreSQL", "MongoDB"],
+                "DevOps & Cloud": ["Git", "Docker", "Kubernetes", "CI/CD", "AWS", "Azure", "GCP", "Ansible", "Terraform"],
+                "Security": ["Penetration Testing", "OWASP", "Cryptography", "Network Security", "Password Cracking", "Log Analysis", "Enumeration & Exploitation"]
+            },
+            experience: [
+                {
+                    role: "Software Engineer",
+                    company: "Shoptaki Inc.",
+                    period: "Feb 2025 - Present",
+                    description: "Built secure KYC systems with Python and ArangoDB, currently leading the development of distributed networking systems using C++, QUIC protocol."
+                },
+                {
+                    role: "Independent Security Researcher - AI-Powered Penetration Testing",
+                    company: "Northeastern University",
+                    period: "Aug 2024 - Dec 2024",
+                    description: "Integrated AI-driven tools like HackingBuddyGPT with Metasploitable2 to automate privilege escalation analysis and benchmark LLM-assisted offensive security workflows."
+                },
+                {
+                    role: "Data Analyst Intern",
+                    company: "CLYNK",
+                    period: "May 2024 - Aug 2024",
+                    description: "Automated data pipelines and competitive intelligence tools using Python, Regex, Selenium, and Power Query—boosted processing speed by 40% and cut manual reporting by 30%."
+                }, 
+                {
+                    role: "Graduate Research Assistant - Deep Learning for Genomics",
+                    company: "Northeastern University",
+                    period: "Feb 2024 - Apr 2024",
+                    description: "Applied deep learning (CNN, RNN) to predict cell surface markers from gene expression data, improving predictive accuracy via PCA and model regularization; also prototyped spiking neural networks to explore biologically inspired computation."
+                }, 
+                {
+                    role: "Cybersecurity Intern",
+                    company: "Indian Servers",
+                    period: "Aug 2021 - Oct 2021",
+                    description: "Simulated real-world cyberattacks on OWASP Juice Shop to exploit Top 10 vulnerabilities (XSS, SQLi, IDOR), strengthening threat assessment skills and contributing to secure development practices."
+                }
+            ],
+            projects: [
+                {
+                    name: "E-commerce Platform",
+                    tech: "React, Node.js, Next.js, Stripe, MongoDB, Express.js",
+                    description: "Full-stack e-commerce app with secure payments, role-based access, and order management."
+                },
+                {
+                    name: "Ethical Hacking Lab Simulation",
+                    tech: "Nmap, Metasploit, Wireshark, Kali Linux",
+                    description: "Simulated attacks on vulnerable systems to exploit OWASP Top 10 and analyze remediation strategies."
+                },
+                {
+                    name: "Data Warehousing & OLAP Analytics",
+                    tech: "R, MySQL, SQLite, XPath",
+                    description: "ETL pipeline and OLAP system for biomedical data, improving performance and query efficiency."
+                },
+                {
+                    name: "Network Intrusion Detection System",
+                    tech: "Python, Random Forest, KMeans, CNN, scikit-learn, Tkinter",
+                    description: "Real-time cyberattack detection with 92%+ accuracy using ML models and live threat dashboard."
+                },
+                {
+                    name: "Geospatial Visualization Tool",
+                    tech: "MapLibre, D3.js, Google Maps API",
+                    description: "Interactive map linking bioscience firms to colleges in Maine with real-time data updates."
+                },
+                {
+                    name: "Kill Doctor Lucky - Board Game",
+                    tech: "Java, MVC Architecture",
+                    description: "Java-based board game with scalable MVC design and responsive user interaction."
+                },
+                {
+                    name: "Home Delivery Meals Analysis",
+                    tech: "KMeans, SVM, Decision Tree, PCA",
+                    description: "Analyzed health and financial trends to optimize resource allocation in senior meal programs."
+                },
+                {
+                    name: "Credit Card Fraud Detection",
+                    tech: "GAN, ARIMA, Python",
+                    description: "Detected fraud using GANs and time series analysis to model and track evolving attack patterns."
+                }
+            ],
+            achievements: [
+                "Scored 2,225/3,000 (81.8% accuracy) in the National Cyber League Individual Game, excelling in scanning, enumeration, and web exploitation.",
+                "Ranked #474 globally out of 4,280+ teams in TryHackMe’s Hackfinity Battle, solving advanced AI prompt manipulation and privilege escalation challenges.",
+                "Secured 15/24 challenges in 53 minutes in a Secure Code Warrior's Tournament, demonstrating strong secure software development skills.",
+                "Selected for US Cyber Challenge Cyber Camp after achieving 29/30 on Spring 2025 assessment, showcasing expert networking and packet analysis skills.",
+                "Defended enterprise systems as part of the Blue Team in a live hacking event at BSides NYC– Pros vs. Joes, hardening systems under simulated attack."
+            ],
+        };
+        
+        const commands = {
+            help: () => {
+                return `
+<span class="command">Available Commands:</span>
+  <span class="success">whoami</span>        - Display user information
+  <span class="success">skills</span>        - Show technical skills
+  <span class="success">experience</span>    - Display work experience
+  <span class="success">projects</span>      - Show project portfolio
+  <span class="success">achievements</span>  - List accomplishments
+  <span class="success">contact</span>       - Get contact information
+  <span class="success">hack</span>          - Enter hacker mode 😈
+  <span class="success">clear</span>         - Clear terminal
+  <span class="success">exit</span>          - Close terminal
+  <span class="success">history</span>       - Show command history
+  <span class="success">uptime</span>        - Show system uptime
+  <span class="success">neofetch</span>      - Display system info
+                `;
+            },
+            
+            whoami: () => {
+                return `
+<span class="ascii-art">
+    ╔═══════════════════════════════════════╗
+    ║            USER PROFILE               ║
+    ╚═══════════════════════════════════════╝
+</span>
+
+<span class="success">Name:</span>         ${userData.name}
+<span class="success">Title:</span>        ${userData.title}
+<span class="success">Location:</span>     ${userData.location}
+<span class="success">Status:</span>       <span class="highlight">Actively seeking opportunities. Available immediately.</span>
+
+<span class="dim">// I’m a security-focused engineer who blends</span>
+<span class="dim">// offensive knowledge with defensive design.</span>
+<span class="dim">// I build scalable systems and write resilient code</span>
+<span class="dim">// that stands up to real-world threats.</span>
+                `;
+            },
+            
+            skills: () => {
+                let output = `
+<span class="command">Technical Skills Matrix:</span>
+<span class="dim">════════════════════════════════════════</span>
+`;
+                
+                Object.keys(userData.skills).forEach(category => {
+                    output += `\n<span class="success">${category}:</span>\n`;
+                    userData.skills[category].forEach(skill => {
+                        const proficiency = Math.floor(Math.random() * 30) + 70;
+                        output += `  ${skill.padEnd(20)} `;
+                        output += `<span class="dim">[</span>`;
+                        output += `<span class="success">${'█'.repeat(Math.floor(proficiency/10))}</span>`;
+                        output += `<span class="dim">${'░'.repeat(10-Math.floor(proficiency/10))}] ${proficiency}%</span>\n`;
+                    });
+                });
+                
+                return output;
+            },
+            
+            experience: () => {
+                let output = `
+<span class="command">Work Experience:</span>
+<span class="dim">════════════════════════════════════════</span>
+`;
+                
+                userData.experience.forEach((exp, index) => {
+                    output += `
+<span class="success">${index + 1}. ${exp.role}</span>
+   <span class="cyan">Company:</span> ${exp.company}
+   <span class="cyan">Period:</span>  ${exp.period}
+   <span class="cyan">Details:</span> ${exp.description}
+`;
+                });
+                
+                return output;
+            },
+            
+            projects: () => {
+                let output = `
+<span class="command">Project Portfolio:</span>
+<span class="dim">════════════════════════════════════════</span>
+`;
+                
+                userData.projects.forEach((project, index) => {
+                    output += `
+<span class="success">${index + 1}. ${project.name}</span>
+   <span class="cyan">Tech Stack:</span> ${project.tech}
+   <span class="cyan">Description:</span> ${project.description}
+`;
+                });
+                
+                return output;
+            },
+            
+            achievements: () => {
+                let output = `
+<span class="command">Achievements Unlocked:</span>
+<span class="dim">════════════════════════════════════════</span>
+`;
+                
+                userData.achievements.forEach(achievement => {
+                    output += `\n<span class="success">✓</span> ${achievement}`;
+                });
+                
+                return output;
+            },
+            
+            contact: () => {
+                return `
+<span class="command">Contact Information:</span>
+<span class="dim">════════════════════════════════════════</span>
+
+<span class="success">Email:</span>    ${userData.email}
+<span class="success">GitHub:</span>   ${userData.github}
+<span class="success">LinkedIn:</span> ${userData.linkedin}
+
+<span class="warning">⚠ All communications are encrypted and monitored</span>
+<span class="dim">// Feel free to reach out for collaboration opportunities!</span>
+                `;
+            },
+            
+            hack: () => {
+                return `
+<span class="error">ACCESS GRANTED</span>
+<span class="dim">Initializing hacker mode...</span>
+
+<span class="ascii-art">
+    ⠀⠀⠀⠀⠀⠀⠀⠀⢀⡴⠊⠉⠉⢉⠏⠻⣍⠑⢲⠢⠤⣄⣀⠀⠀⠀⠀⠀⠀⠀
+    ⠀⠀⠀⠀⠀⠀⠀⠀⣻⣿⢟⣽⠿⠯⠛⡸⢹⠀⢹⠒⣊⡡⠜⠓⠢⣄⠀⠀⠀⠀
+    ⠀⠀⠀⠀⠀⠀⢀⡜⣿⣷⣽⠓⠀⢠⢂⣣⠋⠂⣾⠼⢌⠳⢄⢀⡠⠜⣣⡀⠀⠀
+    ⠀⠀⠀⠀⠀⢠⢻⢱⣭⠹⣟⠆⠀⠀⠀⠀⠀⠀⠈⢎⢂⣤⠄⠀⠀⠙⢿⣷⡄⠀
+    ⠀⠀⠀⠀⢀⠎⠀⠀⠸ⶊ⠍⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⢜⠿⣿
+    ⠀⠀⠀⠀⡌⠀⠀⢀⠞⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠑⠀⠀
+    ⠀⠀⠀⠀⠀⠀⠀⢕⢇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+    ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+</span>
+
+<span class="success">[SYSTEM BREACHED]</span> Just kidding! 😄
+I'm an ethical hacker who uses skills for good.
+
+<span class="dim">// Real hackers protect, not attack</span>
+<span class="dim">// Want to learn ethical hacking? Let's connect!</span>
+                `;
+            },
+            
+            clear: () => {
+                output.innerHTML = '';
+                return '';
+            },
+            
+            history: () => {
+                let output = `<span class="command">Command History:</span>\n`;
+                commandHistory.forEach((cmd, index) => {
+                    output += `<span class="dim">${index + 1}.</span> ${cmd}\n`;
+                });
+                return output;
+            },
+            
+            uptime: () => {
+                const uptime = Math.floor((Date.now() - startTime) / 1000);
+                const hours = Math.floor(uptime / 3600);
+                const minutes = Math.floor((uptime % 3600) / 60);
+                const seconds = uptime % 60;
+                return `<span class="success">System uptime:</span> ${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            },
+            
+            neofetch: () => {
+                return `
+<span class="ascii-art">
+       _,met$$$$$gg.          dev@portfolio
+    ,g$$$$$$$$$$$$$$$P.       ─────────────────
+  ,g$$P"     """Y$$.".        <span class="success">OS:</span> Arch Linux x86_64
+ ,$$P'              \`$$$.     <span class="success">Host:</span> Developer Workstation
+',$$P       ,ggs.     \`$$b:   <span class="success">Kernel:</span> 6.1.0-arch1-1  
+\`d$$'     ,$P"'   .    $$$    <span class="success">Uptime:</span> ${Math.floor((Date.now() - startTime) / 60000)} mins
+ $$P      d$'     ,    $$P    <span class="success">Packages:</span> 1337 (pacman)
+ $$:      $$.   -    ,d$$'    <span class="success">Shell:</span> zsh 5.9
+ $$;      Y$b._   _,d$P'      <span class="success">Terminal:</span> alacritty
+ Y$$.    \`.\`"Y$$$$P"'         <span class="success">CPU:</span> Intel i9-13900K (24) @ 5.8GHz
+ \`$$b      "-.__              <span class="success">GPU:</span> NVIDIA GeForce RTX 4090  
+  \`Y$$                        <span class="success">Memory:</span> 2048MiB / 32768MiB
+   \`Y$$.                      
+     \`$$b.                    
+       \`Y$$b.
+          \`"Y$b._
+              \`"""
+</span>`;
+            },
+            
+            exit: () => {
+                setTimeout(() => {
+                    window.close();
+                }, 1000);
+                return `<span class="warning">Closing terminal... Goodbye! 👋</span>`;
+            }
+        };
+        
+        function executeCommand(cmd) {
+            const trimmedCmd = cmd.trim().toLowerCase();
+            
+            if (trimmedCmd === '') return '';
+            
+            commandHistory.push(cmd);
+            historyIndex = commandHistory.length;
+            
+            if (commands[trimmedCmd]) {
+                return commands[trimmedCmd]();
+            } else {
+                return `<span class="error">Command not found: ${cmd}</span>\nType <span class="success">help</span> for available commands.`;
+            }
+        }
+        
+        function addToOutput(text) {
+            if (text.trim() !== '') {
+                output.innerHTML += text + '\n';
+                // Force scroll to bottom with a small delay to ensure content is rendered
+                setTimeout(() => {
+                    output.scrollTop = output.scrollHeight;
+                    // Also scroll the terminal window container
+                    const terminalWindow = document.querySelector('.terminal-window');
+                    terminalWindow.scrollTop = terminalWindow.scrollHeight;
+                }, 10);
+            }
+        }
+        
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('currentTime').textContent = now.toLocaleTimeString();
+            
+            const uptime = Math.floor((Date.now() - startTime) / 1000);
+            const hours = Math.floor(uptime / 3600);
+            const minutes = Math.floor((uptime % 3600) / 60);
+            const seconds = uptime % 60;
+            document.getElementById('uptime').textContent = 
+                `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+        
+        // Initialize terminal - shorter boot time and ensure it always loads
+        function initializeTerminal() {
+            bootScreen.classList.add('hidden');
+            setTimeout(() => {
+                bootScreen.style.display = 'none';
+                addToOutput(commands.whoami());
+                addToOutput(`\n<span class="dim">Type <span class="success">help</span> to see available commands.</span>`);
+                input.focus();
+            }, 500);
+        }
+        
+        // Start initialization after a shorter delay, with fallback
+        setTimeout(initializeTerminal, 1500);
+        
+        // Fallback: ensure terminal loads even if something goes wrong
+        setTimeout(() => {
+            if (!bootScreen.classList.contains('hidden')) {
+                console.log('Boot screen fallback triggered');
+                initializeTerminal();
+            }
+        }, 5000);
+        
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const command = input.value;
+                addToOutput(`<span class="prompt">dev@portfolio:~$</span> ${command}`);
+                const result = executeCommand(command);
+                addToOutput(result);
+                input.value = '';
+                
+                // Ensure the input stays focused and visible
+                setTimeout(() => {
+                    input.focus();
+                    input.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                }, 50);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (historyIndex > 0) {
+                    historyIndex--;
+                    input.value = commandHistory[historyIndex];
+                }
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (historyIndex < commandHistory.length - 1) {
+                    historyIndex++;
+                    input.value = commandHistory[historyIndex];
+                } else {
+                    historyIndex = commandHistory.length;
+                    input.value = '';
+                }
+            }
+        });
+        
+        // Keep input focused
+        document.addEventListener('click', () => {
+            input.focus();
+        });
+        
+        // Update time every second
+        setInterval(updateTime, 1000);
+        updateTime();
+        
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+        
+        // Also add keyboard shortcut to skip boot screen
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                if (!bootScreen.classList.contains('hidden')) {
+                    initializeTerminal();
+                }
+            }
+        });
+    </script>
+</body>
+</html>
